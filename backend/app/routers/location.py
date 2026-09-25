@@ -1,11 +1,16 @@
-"""场地租用接口：维护拍摄场地，覆盖签约场地、确认进场、办理退场等动作。"""
+"""场地租用接口：维护拍摄场地，覆盖导入、签约场地、确认进场、办理退场等动作。"""
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 
-from app.schemas import ActionResult, EntryPayload, PageResult
+from app.schemas import (
+    ActionResult,
+    EntryPayload,
+    LocationImportPayload,
+    LocationImportResult,
+    PageResult,
+)
 from app.services.location import LocationService
 
 router = APIRouter(prefix="/api/location", tags=["场地租用"])
@@ -19,15 +24,59 @@ STATUSES = ["待洽谈", "已签约", "使用中", "已退场"]
 @router.get("", response_model=PageResult[dict])
 def list_entries(
     keyword: str | None = Query(default=None, description="按场地编号检索"),
+    name: str | None = Query(default=None, description="按场地名称检索"),
+    location_type: str | None = Query(default=None, description="按场地类型检索"),
     status: str | None = Query(default=None, description="待洽谈、已签约、使用中、已退场"),
     page: int = 1,
     size: int = 20,
 ) -> PageResult[dict]:
-    """按场地编号与状态过滤场地租用列表；没有数据时返回空页，不报错。"""
+    """按场地编号、名称、类型与状态过滤场地租用列表；没有数据时返回空页，不报错。"""
     if size > 200:
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
-    items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
+    items, total = service.list_entries(
+        keyword=keyword,
+        name=name,
+        location_type=location_type,
+        status=status,
+        page=page,
+        size=size,
+    )
     return PageResult(items=items, total=total, page=page, size=size)
+
+
+@router.post("/import", response_model=LocationImportResult)
+def import_entries(payload: LocationImportPayload) -> LocationImportResult:
+    """导入当前筛选范围对应的场地文件；逐行返回失败原因，单行失败不阻断其他行。"""
+    result = service.import_content(
+        filename=payload.filename,
+        content=payload.content,
+        keyword=payload.keyword,
+        name=payload.name,
+        location_type=payload.location_type,
+        status=payload.status,
+        start_row=payload.start_row,
+    )
+    return LocationImportResult(**result)
+
+
+@router.get("/export")
+def export_entries(
+    keyword: str | None = Query(default=None, description="按场地编号检索"),
+    name: str | None = Query(default=None, description="按场地名称检索"),
+    location_type: str | None = Query(default=None, description="按场地类型检索"),
+    status: str | None = Query(default=None, description="待洽谈、已签约、使用中、已退场"),
+) -> JSONResponse:
+    """导出当前筛选条件下的场地租用清单，字段与页面所选列保持一致。"""
+    items = service.export_entries(
+        keyword=keyword,
+        name=name,
+        location_type=location_type,
+        status=status,
+    )
+    return JSONResponse(
+        content={"module": "location", "total": len(items), "items": items},
+        headers={"Content-Disposition": 'attachment; filename="location-export.json"'},
+    )
 
 
 @router.get("/{entry_id}", response_model=dict)
@@ -56,10 +105,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出场地租用清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "location", "total": total, "items": items}

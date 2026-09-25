@@ -28,6 +28,40 @@ class EntryPayload(BaseModel):
     remark: str | None = None
 
 
+class LocationImportPayload(BaseModel):
+    """场地租用文件导入请求：内容直接随 JSON 提交，便于失败后按行续传。"""
+
+    filename: str
+    content: str
+    keyword: str | None = None
+    name: str | None = None
+    location_type: str | None = None
+    status: str | None = None
+    start_row: int = Field(default=0, ge=0)
+
+
+class LocationImportRowResult(BaseModel):
+    row: int
+    status: str
+    reason: str | None = None
+    entry: dict[str, Any] | None = None
+
+
+class LocationImportResult(BaseModel):
+    ok: bool
+    message: str
+    total: int = 0
+    processed: int = 0
+    created: int = 0
+    duplicates: int = 0
+    failed: int = 0
+    interrupted: bool = False
+    resume_from: int | None = None
+    file_fingerprint: str | None = None
+    scope: dict[str, Any] = Field(default_factory=dict)
+    rows: list[LocationImportRowResult] = Field(default_factory=list)
+
+
 
 class ScriptEntry(BaseModel):
     """剧本明细结构。"""
