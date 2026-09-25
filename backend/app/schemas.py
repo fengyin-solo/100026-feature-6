@@ -28,6 +28,31 @@ class EntryPayload(BaseModel):
     remark: str | None = None
 
 
+class ImportConflict(BaseModel):
+    """导入时的冲突行：记录行号、字段和原因，但不阻断其他行。"""
+
+    line: int
+    values: dict[str, Any] = Field(default_factory=dict)
+    reason: str
+
+
+class ImportResult(BaseModel):
+    """文件导入结果：成功、冲突、中断的行分别汇总，便于断点续传。"""
+
+    ok: bool = True
+    message: str = ""
+    filename: str | None = None
+    fingerprint: str | None = None
+    scope: dict[str, str] = Field(default_factory=dict)
+    total: int = 0
+    created: int = 0
+    conflicted: int = 0
+    skipped: int = 0
+    interrupted: bool = False
+    next_index: int | None = None
+    conflicts: list[ImportConflict] = Field(default_factory=list)
+
+
 
 class ScriptEntry(BaseModel):
     """剧本明细结构。"""

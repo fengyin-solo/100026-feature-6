@@ -16,7 +16,7 @@ class Store:
         }
 
     def module_names(self) -> list[str]:
-        return sorted(self._tables)
+        return sorted(name for name in self._tables if not name.startswith("__"))
 
     def rows(self, module: str) -> list[dict[str, Any]]:
         return self._tables.setdefault(module, [])
@@ -26,6 +26,14 @@ class Store:
             if int(row.get("id", 0)) == entry_id:
                 return row
         return None
+
+    def next_id(self, module: str) -> int:
+        return max((int(row.get("id", 0)) for row in self.rows(module)), default=0) + 1
+
+    def import_batches(self, module: str) -> dict[str, dict[str, Any]]:
+        """各模块的导入批次暂存区：按文件指纹检索，支持同文件去重与断点续传。"""
+        tables = self._tables.setdefault("__imports__", {})
+        return tables.setdefault(module, {})
 
     def overview(self) -> dict[str, object]:
         modules: list[dict[str, object]] = []
